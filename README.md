@@ -51,6 +51,14 @@ improving through hands-on projects.
 
 <img src="./generated/contributions.svg" alt="Daily contribution grid for the last 365 UTC days, one cell per day, shaded by contribution count">
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./dist/github-snake-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="./dist/github-snake.svg">
+    <img alt="GitHub contribution activity" src="./dist/github-snake.svg">
+  </picture>
+</p>
+
 <!-- ASCII portrait: add a photo at assets/portrait.jpg, run `python scripts/generate_portrait.py`,
      then uncomment the line below.
 <img src="./generated/portrait.svg" alt="ASCII portrait of Josh Jiby, generated from a photograph and drawn on by line">

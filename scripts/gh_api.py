@@ -59,12 +59,18 @@ def resolve_login() -> str:
     return match.group(1)
 
 
-def resolve_token() -> str:
-    """PROFILE_TOKEN wins so a PAT can be supplied only if GITHUB_TOKEN fails."""
+def resolve_token() -> tuple[str, str]:
+    """Return ``(variable name, token)``.
+
+    PROFILE_TOKEN is checked first: it is the one that can carry ``read:user``,
+    which is what makes private contribution counts appear in the calendar. The
+    name is returned so callers can log which credential was used without ever
+    logging the credential itself.
+    """
     for var in ("PROFILE_TOKEN", "GH_TOKEN", "GITHUB_TOKEN"):
         value = os.environ.get(var, "").strip()
         if value:
-            return value
+            return var, value
     raise GitHubError(
         "no token found. GitHub's GraphQL API requires authentication even for "
         "public data. Set GITHUB_TOKEN (Actions provides it automatically) or "
@@ -161,6 +167,11 @@ query($login: String!, $from: DateTime!, $to: DateTime!) {
       totalPullRequestContributions
       totalIssueContributions
       totalPullRequestReviewContributions
+      # Private/internal activity, only populated when the token carries
+      # read:user. Reported as an aggregate count and nothing else - no
+      # repository names, URLs or languages are requested anywhere.
+      restrictedContributionsCount
+      hasAnyRestrictedContributions
       contributionCalendar {
         totalContributions
         weeks { contributionDays { date weekday contributionCount } }
@@ -202,24 +213,67 @@ class Contributions:
     pull_requests: int
     issues: int
     reviews: int
+    restricted: int = 0
+    has_restricted: bool = False
     display_name: str = ""
+    reconciliation: str = ""
     _days: list[Day] = field(default_factory=list)
 
-    def _inside(self, day: Day) -> bool:
-        return self.window.start <= day.date <= self.window.end
+    @property
+    def calendar_days(self) -> list[Day]:
+        """Every day the API returned, including any week padding."""
+        return [d for week in self.weeks for d in week]
 
     @property
     def days(self) -> list[Day]:
-        """Every day in the window, in order.
+        """The days all counting is done over, reconciled against the API total.
 
-        The calendar's first and last weeks are aligned to Sunday and can spill
-        outside the requested range, so they are clipped here. Everything that
-        counts days - totals, streaks, rates - goes through this property, and
-        only the grid layout uses the raw weeks.
+        GitHub aligns the calendar to whole Sunday-to-Saturday weeks, so it can
+        return more days than the window asked for - its own web calendar
+        currently spans 369. Whether the padding days carry counts decides which
+        set of days actually adds up to ``totalContributions``, so rather than
+        assuming one behaviour we pick whichever set reconciles and record the
+        choice in ``reconciliation``.
         """
-        if not self._days:
-            self._days = [d for week in self.weeks for d in week if self._inside(d)]
+        if self._days:
+            return self._days
+
+        everything = self.calendar_days
+        windowed = [d for d in everything if self.window.start <= d.date <= self.window.end]
+
+        if sum(d.count for d in everything) == self.total:
+            self._days, self.reconciliation = everything, "full calendar"
+        elif sum(d.count for d in windowed) == self.total:
+            self._days, self.reconciliation = windowed, "clipped to window (API padded the calendar)"
+        else:
+            # Neither reconciles. Keep everything so the diagnostics can show
+            # both sums, and let verify() stop the run.
+            self._days, self.reconciliation = everything, "MISMATCH"
         return self._days
+
+    @property
+    def daily_sum(self) -> int:
+        """Total rebuilt from the daily values, for cross-checking against the API."""
+        return sum(d.count for d in self.days)
+
+    def verify(self) -> None:
+        """Fail loudly when no set of daily values reproduces the API total.
+
+        Publishing a chart whose cells contradict the number printed above it is
+        worse than publishing nothing, so this is a hard error.
+        """
+        self.days  # force reconciliation
+        if self.reconciliation == "MISMATCH":
+            everything = self.calendar_days
+            windowed = [d for d in everything if self.window.start <= d.date <= self.window.end]
+            raise GitHubError(
+                f"contribution calendar does not reconcile. The API reports "
+                f"totalContributions={self.total}, but the daily contributionCount "
+                f"values sum to {sum(d.count for d in everything)} across all "
+                f"{len(everything)} returned days and {sum(d.count for d in windowed)} "
+                f"across the {len(windowed)} days inside the requested window. "
+                f"Refusing to generate statistics from contradictory data."
+            )
 
     @property
     def active_days(self) -> int:
@@ -230,7 +284,7 @@ class Contributions:
         return max(self.days, key=lambda d: (d.count, d.date)) if self.days else None
 
     def weekly_totals(self) -> list[int]:
-        return [sum(d.count for d in week if self._inside(d)) for week in self.weeks]
+        return [sum(d.count for d in week) for week in self.weeks]
 
     def current_streak(self) -> Streak:
         """Consecutive active days ending today.
@@ -291,11 +345,15 @@ def fetch_contributions(login: str, window: Window, *, token: str) -> Contributi
     return Contributions(
         window=window,
         weeks=weeks,
+        # contributionCalendar.totalContributions is authoritative: it is the
+        # same number GitHub prints on the profile page.
         total=int(calendar["totalContributions"]),
         commits=int(collection["totalCommitContributions"]),
         pull_requests=int(collection["totalPullRequestContributions"]),
         issues=int(collection["totalIssueContributions"]),
         reviews=int(collection["totalPullRequestReviewContributions"]),
+        restricted=int(collection.get("restrictedContributionsCount") or 0),
+        has_restricted=bool(collection.get("hasAnyRestrictedContributions")),
         display_name=user.get("name") or user["login"],
     )
 

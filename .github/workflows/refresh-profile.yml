@@ -26,10 +26,13 @@ jobs:
 
       - name: Generate statistics panels
         env:
-          # The built-in token is enough for public contribution data. Add a
-          # fine-grained PROFILE_TOKEN secret (read-only, public data) only if
-          # the run fails with a permissions error.
-          GITHUB_TOKEN: ${{ secrets.PROFILE_TOKEN || secrets.GITHUB_TOKEN }}
+          # Both are passed under their own names so the generator can report
+          # which one it used. PROFILE_TOKEN takes priority: it is the one that
+          # can carry read:user, which is what makes private contribution
+          # counts appear in the contribution calendar. GITHUB_TOKEN remains
+          # the fallback and covers public data on its own.
+          PROFILE_TOKEN: ${{ secrets.PROFILE_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PROFILE_LOGIN: ${{ github.repository_owner }}
         run: python scripts/generate_stats.py
 
@@ -49,9 +52,27 @@ jobs:
         continue-on-error: true
         run: python scripts/fetch_ascii_card.py
 
+      # Writes dist/github-snake.svg and dist/github-snake-dark.svg. The query
+      # string is read by the action and is not part of the filename; the
+      # colours are the same terracotta ramps the contribution grid uses, so
+      # the snake matches the rest of the profile rather than GitHub's green.
+      # No GIF output is requested.
+      #
+      # Non-blocking on purpose: the custom statistics matter more than the
+      # snake, so an upstream failure here must not stop them being committed.
+      # @v3 is a mutable upstream tag.
+      - name: Generate contribution snake
+        continue-on-error: true
+        uses: Platane/snk@v3
+        with:
+          github_user_name: ${{ github.repository_owner }}
+          outputs: |
+            dist/github-snake.svg?color_snake=%23a8562b&color_dots=%23eaeae5,%23e7cec0,%23d5a285,%23bf7a52,%239d5227
+            dist/github-snake-dark.svg?color_snake=%23e0885f&color_dots=%23191b1f,%233b2a21,%236d4630,%23a86440,%23e0885f
+
       - name: Commit generated assets when they changed
         run: |
-          TRACKED="generated dark_mode.svg light_mode.svg"
+          TRACKED="generated dist dark_mode.svg light_mode.svg"
           if [ -z "$(git status --porcelain -- $TRACKED)" ]; then
             echo "Generated assets are unchanged; nothing to commit."
             exit 0

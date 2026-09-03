@@ -233,8 +233,6 @@ def contributions_panel(c: gh_api.Contributions) -> str:
 
     for i, week in enumerate(weeks):
         for day in week:
-            if day.date < c.window.start or day.date > c.window.end:
-                continue  # GitHub pads the first and last week beyond the window
             x = grid_x + i * PITCH
             y = grid_y + day.weekday * PITCH
             body.append(d.rect(x, y, CELL, CELL, color=f"c{_level(day.count, cuts)}", radius=2))
@@ -262,15 +260,47 @@ def contributions_panel(c: gh_api.Contributions) -> str:
 
 # --------------------------------------------------------------------------- #
 
+def _report(c: gh_api.Contributions) -> None:
+    """Print the numbers the contribution panels are built from.
+
+    The invariant that matters is that the API total and the sum of the daily
+    values agree; everything else is here to make a disagreement diagnosable.
+    """
+    busiest = c.busiest
+    print()
+    print(f"API total contributions: {c.total}")
+    print(f"Daily contribution sum:  {c.daily_sum}")
+    print(f"Number of weeks:         {len(c.weeks)}")
+    print(f"Number of days:          {len(c.days)}"
+          f"{'' if len(c.days) == len(c.calendar_days) else f' (of {len(c.calendar_days)} returned)'}")
+    print(f"Reconciled via:          {c.reconciliation}")
+    print(f"Calendar range:          {c.days[0].date} .. {c.days[-1].date}" if c.days else "")
+    print(f"Active days:             {c.active_days}")
+    if busiest:
+        print(f"Busiest day:             {busiest.date}")
+        print(f"Busiest day contributions: {busiest.count}")
+    print(f"Private contributions:   {c.restricted}"
+          f"{'' if c.has_restricted else '  (none reported by this token)'}")
+    print(f"Breakdown:               commits={c.commits} prs={c.pull_requests} "
+          f"issues={c.issues} reviews={c.reviews}")
+    print()
+
+
 def main() -> int:
     try:
         login = gh_api.resolve_login()
-        token = gh_api.resolve_token()
+        token_source, token = gh_api.resolve_token()
         window = gh_api.current_window()
         print(f"login   {login}")
         print(f"window  {window.from_iso} .. {window.to_iso}")
+        # Name only. The token value is never printed or written anywhere.
+        print(f"token   {token_source}")
 
         contributions = gh_api.fetch_contributions(login, window, token=token)
+        _report(contributions)
+        # Hard stop if the headline total and the daily grid disagree.
+        contributions.verify()
+
         languages = gh_api.fetch_languages(login, token=token)
     except gh_api.GitHubError as exc:
         print(f"\nrefresh aborted: {exc}", file=sys.stderr)
