@@ -199,45 +199,19 @@ def _level(count: int, cuts: list[int]) -> int:
 
 
 def contributions_panel(c: gh_api.Contributions) -> str:
-    weeks = c.weeks
-    grid_x = PAD + 34
-    grid_y = 68
-    grid_w = len(weeks) * PITCH - GAP
-    grid_h = 7 * PITCH - GAP
-    height = grid_y + grid_h + 44
+    """Contribution activity summary — metrics and legend only, no day grid.
 
-    cuts = _thresholds([day.count for day in c.days])
+    The snake is the sole calendar visualization on the profile. This panel
+    keeps the activity headline, busiest day, and intensity legend so those
+    numbers stay visible without duplicating the grid.
+    """
+    height = 88
     body = [
         d.card(W, height),
         d.eyebrow("CONTRIBUTION ACTIVITY", f"{len(c.days)} DAYS \u00b7 {_num(c.total)} CONTRIBUTIONS"),
     ]
 
-    # Month label above the first column belonging to each new month. The
-    # leading column is only labelled when the month genuinely starts there,
-    # since the calendar's first week is usually a partial one, and the
-    # trailing column is skipped so no label overflows the card edge.
-    previous = None
-    for i, week in enumerate(weeks):
-        month = week[0].date.month
-        if month == previous:
-            continue
-        labelled = previous is not None or week[0].date.day <= 7
-        if labelled and i < len(weeks) - 1:
-            body.append(d.text(grid_x + i * PITCH, 58, week[0].date.strftime("%b").upper(),
-                               size=8.5, color="ink3", tracking=0.8))
-        previous = month
-
-    for row, label in ((1, "MON"), (3, "WED"), (5, "FRI")):
-        body.append(d.text(grid_x - 10, grid_y + row * PITCH + CELL - 2, label,
-                           size=8, color="ink3", anchor="end", tracking=0.6))
-
-    for i, week in enumerate(weeks):
-        for day in week:
-            x = grid_x + i * PITCH
-            y = grid_y + day.weekday * PITCH
-            body.append(d.rect(x, y, CELL, CELL, color=f"c{_level(day.count, cuts)}", radius=2))
-
-    legend_y = grid_y + grid_h + 30
+    legend_y = 68
     legend_w = 5 * PITCH - GAP
     legend_x = W - PAD - legend_w - 42
     body.append(d.text(legend_x - 8, legend_y, "LESS", size=8, color="ink3", anchor="end", tracking=0.8))
@@ -253,8 +227,8 @@ def contributions_panel(c: gh_api.Contributions) -> str:
 
     return d.document(
         W, height, "".join(body),
-        title=f"Daily contribution grid for the last {len(c.days)} days, one cell per UTC day, "
-              f"{c.total} contributions in total",
+        title=f"Contribution activity for the last {len(c.days)} days: "
+              f"{c.total} contributions, busiest day {busiest.date if busiest else 'n/a'}",
     )
 
 

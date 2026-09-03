@@ -49,7 +49,7 @@ improving through hands-on projects.
 
 <img src="./generated/languages.svg" alt="Language distribution by bytes of code across public repositories">
 
-<img src="./generated/contributions.svg" alt="Daily contribution grid for the last 365 UTC days, one cell per day, shaded by contribution count">
+<img src="./generated/contributions.svg" alt="Contribution activity summary: day count, total contributions, busiest day, and intensity legend">
 
 <p align="center">
   <picture>
