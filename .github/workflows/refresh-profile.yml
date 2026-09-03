@@ -42,14 +42,22 @@ jobs:
             echo "assets/portrait.jpg not present - keeping the committed portrait as is."
           fi
 
+      # The only asset not generated in this repository. It is allowed to fail
+      # without failing the run: the previous card stays committed and the rest
+      # of the refresh still goes through.
+      - name: Refresh gh-ascii profile card
+        continue-on-error: true
+        run: python scripts/fetch_ascii_card.py
+
       - name: Commit generated assets when they changed
         run: |
-          if [ -z "$(git status --porcelain -- generated)" ]; then
+          TRACKED="generated dark_mode.svg light_mode.svg"
+          if [ -z "$(git status --porcelain -- $TRACKED)" ]; then
             echo "Generated assets are unchanged; nothing to commit."
             exit 0
           fi
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add generated
+          git add $TRACKED
           git commit -m "chore: refresh generated profile assets"
           git push

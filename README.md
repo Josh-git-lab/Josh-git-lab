@@ -1,3 +1,9 @@
+<!-- The light card renders the portrait as a faint outline that reads poorly on
+     white, and the two themes have different intrinsic sizes, so this uses the
+     dark card alone. It carries its own background. To switch to per-theme
+     cards, replace the <img> with a <picture> block referencing both files. -->
+<img src="dark_mode.svg" width="100%" alt="ASCII profile card for Josh-git-lab: account age, top languages, repository, star and follower counts">
+
 # Josh Jiby
 
 <samp>Computer Science Engineering · SRM Institute of Science and Technology</samp>
