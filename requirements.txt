@@ -1,0 +1,8 @@
+# Only scripts/generate_portrait.py needs these.
+# scripts/generate_stats.py is standard library only, by design.
+Pillow>=10.2
+numpy>=1.26
+
+# Optional: enables face-aware cropping and CLAHE local contrast. The portrait
+# generator falls back to a centred crop and a high-pass filter without it.
+opencv-python-headless>=4.9

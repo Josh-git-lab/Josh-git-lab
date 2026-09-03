@@ -1,0 +1,16 @@
+# The generators write LF and the workflow commits only when generated files
+# actually changed. Without this, a Windows checkout would store CRLF, the
+# Linux runner would rewrite LF, and every scheduled run would commit noise.
+* text=auto eol=lf
+
+*.svg text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+
+*.ttf binary
+*.woff2 binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.webp binary
